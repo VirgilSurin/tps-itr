@@ -27,13 +27,14 @@ void hande_ok(int signum, siginfo_t* info, void* context) {
     
     /* process the array */
     shmat(shmid, NULL, 0);               /* read the tab */
-    int tab = segment + sizeof(pid_t);   /* shift to the second case, because the first one is for the pid */
+    pid_t arrayman_pid = segment[1];      /* the pid of the client */
+    int tab = segment + 2*sizeof(pid_t);   /* shift to the second case, because the first one is for the pid */
     sort(tab, tab_size);                 /* process the tab */
     shmdt(segment);                      /* detach the shared memory */
     
     /* process done, send signal */
     union sigval envelope;
-    sigqueue(pid, SIGRT_DONE, envelope);
+    sigqueue(arrayman_pid, SIGRT_DONE, envelope);
     /* back to waiting */
     state = WAITING;
 }

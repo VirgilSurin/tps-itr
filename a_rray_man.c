@@ -12,14 +12,35 @@
 #define SIGRT_OK (SIGRTMIN+2)
 
 #define STARTING 0
-#define WAITING 1
-#define PROCESSING 2
+#define PROCESSING 1
+#define WAITING 2
 #define TERMINATING 3
 
 /* starting state */
 volatile sig_atomic_t state = STARTING;
 
 signed int* shared_mem;
+
+void hande_done(int signum, siginfo_t* info, void* context) {
+    state = PROCESSING;
+    
+
+    for (int i = 0; i < 65535; i++)
+    {
+        if (!(shared_mem[i] < shared_mem[i+1]))
+        {
+            /* incorrectly sorted, recalling master */
+            union sigval envelope;
+            pid_t master_pid = shared_mem[0];
+            sigqueue(master_pid, SIGRT_OK, envelope);
+            return;
+        }
+        
+    }
+    
+    /* back to waiting */
+    state = TERMINATING;
+}
 
 int main(int argc, char const *argv[])
 {
@@ -28,11 +49,25 @@ int main(int argc, char const *argv[])
         sema = sem_open("/memory_semaphore" , O_CREAT, 0600, 1);
     }while (sema == SEM_FAILED);
     sem_wait(sema); //useless here because semaphore cannot be created if another process is already working anyway?
-    
+    state = PROCESSING;
     wr_table();
-    
-    
+    pid_t master_pid = shared_mem[0];
+    /* process done, send signal */
+    union sigval envelope;
+    sigqueue(master_pid, SIGRT_OK, envelope);
+    /* back to waiting */
     state = WAITING;
+
+    struct sigaction descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.sa_flags = SA_SIGINFO;
+    descriptor.sa_sigaction = handle_done();
+    sigaction(SIGRT_DONE, &descriptor, NULL);
+
+    while (state == WAITING) {
+        pause();
+    }
+    printf("YOUPI!");
     sem_post(sema);
 
     sem_unlink("/memory_semaphore");
