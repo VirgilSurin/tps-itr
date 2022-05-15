@@ -1,11 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <time.h>
 #include <sys/ipc.h>
+#include <signal.h>
 #include <sys/shm.h>
 #include <fcntl.h>
 #include <semaphore.h>
-#include <mqueue.h>
+
+#define SIGRT_DONE (SIGRTMIN+1)
+#define SIGRT_OK (SIGRTMIN+2)
+
+#define STARTING 0
+#define WAITING 1
+#define PROCESSING 2
+#define TERMINATING 3
+
+/* starting state */
+volatile sig_atomic_t state = STARTING;
 
 signed int* shared_mem;
 
@@ -18,14 +30,9 @@ int main(int argc, char const *argv[])
     sem_wait(sema); //useless here because semaphore cannot be created if another process is already working anyway?
     
     wr_table();
-    mqd_t wrote_queue = mq_open("/wrote-queue", O_WRONLY);
-    if (wrote_queue == -1)
-    {
-        perror("mqopen"); return EXIT_FAILURE;
-    }
-    int status = mq_send(wrote_queue, );
     
-
+    
+    state = WAITING;
     sem_post(sema);
 
     sem_unlink("/memory_semaphore");
@@ -67,6 +74,7 @@ void wr_table(){
     }
     else{
         for(int i = 0; i<65536; i++){
+            
             shared_mem[i] = table[i];
         }
     }
