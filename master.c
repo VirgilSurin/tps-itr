@@ -23,7 +23,6 @@ int* segment;
 int shmid;
 int tab_size = sizeof(signed int)*65536;
 
-
 int compare(const void* a, const void* b) {
     int x = *((int*) a);
     int y = *((int*) b);
@@ -32,20 +31,20 @@ int compare(const void* a, const void* b) {
     return 1;
 }
 
-void sort(signed int* tab, int size) {
-    qsort(tab, size, sizeof(signed int), compare);
+void sort(signed int* tab) {
+    qsort(tab, 65536, sizeof(signed int), compare);
 }
 
 void handle_ok(int signum, siginfo_t* info, void* context) {
+    printf("Processing...\n");
     state = PROCESSING;
     
     /* process the array */
     shmat(shmid, NULL, 0);               /* read the tab */
     pid_t arrayman_pid = segment[1];      /* the pid of the client */
     int* tab = segment + 2*sizeof(pid_t);   /* shift to the second case, because the first one is for the pid */
-    sort(tab, tab_size);                 /* process the tab */
+    sort(tab);                 /* process the tab */
     shmdt(segment);                      /* detach the shared memory */
-    
     /* process done, send signal */
     union sigval envelope;
     sigqueue(arrayman_pid, SIGRT_DONE, envelope);
@@ -60,14 +59,27 @@ void handle_death(int signum, siginfo_t* info, void* context) {
 }
 
 int main(int argc, char *argv[]) {
-    
     pid_t pid = getpid();
+    printf("my pid : %d\n", pid);
     
     /* creates the shared memory */
-    key_t ipc_key = ftok("malenia", 42);
+    key_t ipc_key = ftok("./malenia", 42);
+    if (ipc_key == -1){
+        perror("ftok");
+        return EXIT_SUCCESS;
+    }
+    
     shmid = shmget(ipc_key, tab_size+2*sizeof(pid_t), IPC_CREAT | 0666);
+    if (shmid == -1){
+        perror("shmget");
+        return EXIT_FAILURE;
+    }
     /* write our pid on the first case */
-    shmat(shmid, NULL, 0);
+    segment = shmat(shmid, NULL, 0);
+    if (segment == (void*) - 1) {
+        perror("shmat");
+        return EXIT_FAILURE;
+    }
     segment[0] = pid;
     shmdt(segment);
     
@@ -82,6 +94,7 @@ int main(int argc, char *argv[]) {
 
     /* now we wait */
     while (state == WAITING) {
+        printf("waiting for signal\n");
         pause();
     }
     printf("This is the end");
