@@ -22,7 +22,7 @@ unsigned int* segment;
 int shmid;
 int tab_size = sizeof(signed int)*65536;
 
-void hande_ok(int signum, siginfo_t* info, void* context) {
+void handle_ok(int signum, siginfo_t* info, void* context) {
     state = PROCESSING;
     
     /* process the array */
@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
     struct sigaction descriptor;
     memset(&descriptor, 0, sizeof(descriptor));
     descriptor.sa_flags = SA_SIGINFO;
-    descriptor.sa_sigaction = handle_ok();
+    descriptor.sa_sigaction = handle_ok;
     sigaction(SIGRT_OK, &descriptor, NULL);
 
     /* now we wait */
