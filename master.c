@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/ipc.h>
 #include <signal.h>
 #include <sys/shm.h>
@@ -18,17 +19,30 @@
 
 /* starting state */
 volatile sig_atomic_t state = STARTING;
-unsigned int* segment;
+int* segment;
 int shmid;
 int tab_size = sizeof(signed int)*65536;
 
-void hande_ok(int signum, siginfo_t* info, void* context) {
+
+int compare(const void* a, const void* b) {
+    int x = *((int*) a);
+    int y = *((int*) b);
+    if (x == y) {return 0;}
+    if (x < y) {return -1;}
+    return 1;
+}
+
+void sort(signed int* tab, int size) {
+    qsort(tab, size, sizeof(signed int), compare);
+}
+
+void handle_ok(int signum, siginfo_t* info, void* context) {
     state = PROCESSING;
     
     /* process the array */
     shmat(shmid, NULL, 0);               /* read the tab */
     pid_t arrayman_pid = segment[1];      /* the pid of the client */
-    int tab = segment + 2*sizeof(pid_t);   /* shift to the second case, because the first one is for the pid */
+    int* tab = segment + 2*sizeof(pid_t);   /* shift to the second case, because the first one is for the pid */
     sort(tab, tab_size);                 /* process the tab */
     shmdt(segment);                      /* detach the shared memory */
     
@@ -63,7 +77,7 @@ int main(int argc, char *argv[]) {
     struct sigaction descriptor;
     memset(&descriptor, 0, sizeof(descriptor));
     descriptor.sa_flags = SA_SIGINFO;
-    descriptor.sa_sigaction = handle_ok();
+    descriptor.sa_sigaction = handle_ok;
     sigaction(SIGRT_OK, &descriptor, NULL);
 
     /* now we wait */
@@ -74,14 +88,3 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-int compare(const void* a, const void* b) {
-    int x = *((int*) a);
-    int y = *((int*) b);
-    if (x == y) {return 0;}
-    if (x < y) {return -1;}
-    return 1;
-}
-
-void sort(signed int* tab, int size) {
-    qsort(tab, size, sizeof(signed int), compare);
-}
