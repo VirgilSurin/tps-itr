@@ -73,7 +73,6 @@ int wr_table(){
 
 
 void handle_done(int signum, siginfo_t* info, void* context) {
-    printf("DONE time\n");
     state = PROCESSING;
     
     /* re-read in the shared memory */
@@ -97,7 +96,6 @@ void handle_done(int signum, siginfo_t* info, void* context) {
     
     for (int i = 0; i < 65535; i++)
     {
-        printf("%d, ", shared_mem[i]);
         if (!(shared_mem[i] < shared_mem[i+1]))
         {
             /* incorrectly sorted, recalling master */
@@ -116,7 +114,7 @@ void handle_done(int signum, siginfo_t* info, void* context) {
 
 int main(int argc, char const *argv[]) {
     /* use -pthread when compilling ! */
-
+    printf("%d ready to work!\n", getpid());
     /* signal association */
     struct sigaction descriptor;
     memset(&descriptor, 0, sizeof(descriptor));
@@ -126,11 +124,12 @@ int main(int argc, char const *argv[]) {
     
     sem_t* sema = NULL;
     do{
+        printf("%d is trying to get sema\n", getpid());
         sema = sem_open("/memory_semaphore" , O_CREAT, 0600, 1);
     }while (sema == SEM_FAILED);
-    /* sem_wait(sema); //useless here because semaphore cannot be created if another process is already working anyway? */
+    sem_wait(sema); //useless here because semaphore cannot be created if another process is already working anyway? */
     state = PROCESSING;
-
+    printf("%d recieved sema\n", getpid());
     /* start of write table */
     signed int* table = create_table();
 
@@ -166,20 +165,19 @@ int main(int argc, char const *argv[]) {
     
     /* process done, send signal */
     union sigval envelope;
-    printf("sending ok to %d\n", master_pid);
+    printf("%d is sending ok to %d\n", getpid(), master_pid);
     sigqueue(master_pid, SIGRT_OK, envelope);
     /* back to waiting */
     state = WAITING;
     
     while (state == WAITING) {
-        printf("waiting...\n");
+        printf("%d is waiting...\n", getpid());
         pause();
     }
-    printf("YOUPI!\n");
     sem_post(sema);
 
     sem_unlink("/memory_semaphore");
-
+    printf("%d work is done!\n", getpid());
     return 0;
 }
 
