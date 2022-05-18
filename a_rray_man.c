@@ -149,7 +149,7 @@ int main(int argc, char const *argv[]) {
     sem_post(sema);
 
     sem_unlink("/memory_semaphore");
-    printf("%d work is done!\n", getpid());
+    printf("%d work is done!\n-------------------------\n", getpid());
     return 0;
 }
 

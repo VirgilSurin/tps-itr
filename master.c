@@ -24,6 +24,7 @@ int shmid;
 int tab_size = sizeof(signed int)*65536;
 
 int compare(const void* a, const void* b) {
+    /* used to compare two numbers in the qsort function */
     int x = *((int*) a);
     int y = *((int*) b);
     if (x == y) {return 0;}
@@ -32,11 +33,11 @@ int compare(const void* a, const void* b) {
 }
 
 void sort(signed int* tab) {
+    /* sort the table */
     qsort(tab, 65536, sizeof(signed int), compare);
 }
 
 void handle_ok(int signum, siginfo_t* info, void* context) {
-    printf("Processing...\n");
     state = PROCESSING;
     
     /* process the array */
@@ -62,6 +63,14 @@ int main(int argc, char *argv[]) {
     pid_t pid = getpid();
     printf("my pid : %d\n", pid);
     
+    /* handle signals */
+    struct sigaction descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.sa_flags = SA_SIGINFO;
+    descriptor.sa_sigaction = handle_ok;
+    sigaction(SIGRT_OK, &descriptor, NULL);
+    
+    
     /* creates the shared memory */
     key_t ipc_key = ftok("./malenia", 42);
     if (ipc_key == -1){
@@ -74,30 +83,24 @@ int main(int argc, char *argv[]) {
         perror("shmget");
         return EXIT_FAILURE;
     }
-    /* write our pid on the first case */
+    
     segment = shmat(shmid, NULL, 0);
     if (segment == (void*) - 1) {
         perror("shmat");
         return EXIT_FAILURE;
     }
+    /* write our pid on the first case */
     segment[0] = pid;
     shmdt(segment);
     
     /* WAITING for arrays to sort */
     state = WAITING;
-    /* only now we are ready to handle signals */
-    struct sigaction descriptor;
-    memset(&descriptor, 0, sizeof(descriptor));
-    descriptor.sa_flags = SA_SIGINFO;
-    descriptor.sa_sigaction = handle_ok;
-    sigaction(SIGRT_OK, &descriptor, NULL);
-
     /* now we wait */
+    printf("ready...\n");
     while (state == WAITING) {
-        printf("waiting for signal\n");
         pause();
     }
-    printf("This is the end");
+    printf("This is the end\n");
     return 0;
 }
 
