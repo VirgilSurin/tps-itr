@@ -4,7 +4,6 @@
 
 #include <signal.h>
 #include <unistd.h>
-#include <time.h>
 
 #include <sys/ipc.h>
 #include <sys/stat.h>
@@ -24,17 +23,19 @@
 
 /* starting state */
 volatile sig_atomic_t state = STARTING;
-int tab_size = sizeof(signed int)*65536;
+int tab_max_size = sizeof(signed int)*65536;
+int tab_len;
 signed int* shared_mem;
 
 signed int* create_table(){
     /* we randomly generate a table */
     // Use current time as seed for random generator
-    srand(time(0));
+    srand(getpid());
 
+    tab_len = rand()%65536;
     signed int* table = malloc(sizeof(signed int) * 65536);
  
-    for(int i = 0; i<65536; i++){
+    for(int i = 0; i<tab_len; i++){
         table[i] = rand();
     }
     return table;
@@ -51,7 +52,7 @@ void handle_done(int signum, siginfo_t* info, void* context) {
         /* return EXIT_SUCCESS; */
     }
     
-    int shmid = shmget(ipc_key, tab_size+2*sizeof(pid_t), IPC_CREAT | 0666);
+    int shmid = shmget(ipc_key, tab_max_size+2*sizeof(int), IPC_CREAT | 0666);
     if (shmid == -1){
         perror("shmget");
         /* return EXIT_FAILURE; */
@@ -63,18 +64,17 @@ void handle_done(int signum, siginfo_t* info, void* context) {
         /* return EXIT_FAILURE; */
     }
     /* sort verification */
-    for (int i = 0; i < 65535; i++)
-    {
-        if (!(shared_mem[i] < shared_mem[i+1]))
-        {
+    int* tab = shared_mem + 2*sizeof(int);
+    for (int i = 0; i < tab_len-1; i++) {
+        if (!(tab[i] < tab[i+1])) {
             /* incorrectly sorted, recalling master */
             union sigval envelope;
             pid_t master_pid = shared_mem[0];
             sigqueue(master_pid, SIGRT_OK, envelope);
             /* return; */
         }
-        
     }
+    printf("%d : min is %d | size is : %d\n", getpid(), tab[0], tab_len);
     /* release the memory */
     shmdt(shared_mem);
     /* back to waiting */
@@ -124,13 +124,13 @@ int main(int argc, char const *argv[]) {
         return EXIT_FAILURE;
     }
     /* we write the generated table into the shared memory */
-    int* tab = shared_mem + 2*sizeof(pid_t);
+    int* tab = shared_mem + 2*sizeof(int);
     for(int i = 0; i<65536; i++){
         tab[i] = table[i];
     }
     /* end of write table */
     pid_t master_pid = shared_mem[0];
-    shared_mem[1] = getpid();
+    shared_mem[1] = tab_len;
     shmdt(shared_mem);
     
     /* the tab is generated and sent into the shared memory,
@@ -150,7 +150,7 @@ int main(int argc, char const *argv[]) {
 
     sem_unlink("/memory_semaphore");
     printf("%d work is done!\n-------------------------\n", getpid());
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 
