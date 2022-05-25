@@ -1,3 +1,4 @@
+#include <bits/types/sigevent_t.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -49,6 +50,29 @@ struct product prod5[10];
 struct product* warehouse_memory;
 int* pid_memory;
 
+struct product remove_last_prod(int prod_type) {
+    switch (prod_type) {
+    case 1: {
+        return prod1[10-prod_space[prod_type]-1];
+    }                                        
+    case 2: {                                
+        return prod2[10-prod_space[prod_type]-1];
+    }                                        
+    case 3: {                                
+        return prod3[10-prod_space[prod_type]-1];
+    }                                        
+    case 4: {                                
+        return prod4[10-prod_space[prod_type]-1];
+    }                                        
+    case 5: {                                
+        return prod5[10-prod_space[prod_type]-1];
+    }
+    }
+    struct product p;       /* void prod, should never be here, just for the warning */
+    return p;
+}
+
+
 void handle_ready(int signum, siginfo_t* info, void* context) {
     /* id of manufacturer */
     int man_id = info->si_value.sival_int;
@@ -71,9 +95,60 @@ void handle_ready(int signum, siginfo_t* info, void* context) {
 }
 
 void handle_queue(int signum, siginfo_t* info, void* context) {
-    
-}
+    /* there is an order in the mq */
+    char* order = malloc(sizeof(char)*5);
+    char* ptr_order = order;
+    ssize_t receive = mq_receive(queue, order, sizeof(int)*5, 0);
+    if (receive == -1) { printf("receive\n"); }
 
+    int required[5];
+    int sum = 0;
+    int flag = 0;
+    for (int i = 0; i < 5; i++) {
+        required[i] = atoi(order[i]);
+        if (10-prod_space[i] <= required[i]) {
+            /* we don't have enough */
+            flag = 1;
+            break;
+        }
+        sum += atoi(order[i]);
+    }
+    if (flag == 0) {
+        /* we have everything for the roder */
+        struct product prod[50];
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < required[i]; j++) {
+                switch (i) {
+                case 1: {
+                    prod[i+j] = remove_last_prod(i);
+                    break;
+                }
+                case 2: {
+                    prod[i+j] = remove_last_prod(i);
+                    break;
+                }
+                case 3: {
+                    prod[i+j] = remove_last_prod(i);
+                    break;
+                }
+                case 4: {
+                    prod[i+j] = remove_last_prod(i);
+                    break;
+                }
+                case 5: {
+                    prod[i+j] = remove_last_prod(i);
+                    break;
+                }
+                }
+                prod_space[i]++;
+            }
+        }
+        /* TODO : place the prod in client's warehouse */
+        
+        mq_close(queue);
+    
+    }
+}
 void handle_prod_collection(int signum, siginfo_t* info, void* context) {
     /* we receive a ready */
     int man_id = info->si_value.sival_int;
@@ -136,10 +211,23 @@ void handle_prod_collection(int signum, siginfo_t* info, void* context) {
 
 int main()
 {
-    queue = mq_open ( " / message - queue " , O_CREAT | O_RDONLY );
-    if ( queue == -1) { perror ( " mq_open " ); return EXIT_FAILURE ; }
+    /* create the queue */
+    queue = mq_open ("/message-queue", O_CREAT | O_RDONLY );
+    if (queue == -1) { perror ("mq_open"); return EXIT_FAILURE ; }
 
-    mq_notify(queue, SIGRT_QUEUE);
+    /* handler for queue */
+    struct sigaction descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.sa_flags = SA_SIGINFO;
+    descriptor.sa_sigaction = handle_queue;
+    sigaction(SIGRT_QUEUE, &descriptor, NULL);
+
+    /* queue notification */
+    struct sigevent sigevent;
+    memset(&sigevent, 0, sizeof(sigevent));
+    sigevent.sigev_signo = SIGRT_QUEUE;
+    mq_notify(queue, &sigevent);
+    
     /* encode products values */
     total_volume = 2*10 + 3*10 + 1*10 + 5*10 + 4*10;
     
@@ -169,7 +257,7 @@ int main()
     sigaction(SIGRT_READY, &descriptor, NULL);
     
     /* creates a message queue to handle commands */
-    mq_close ( queue );
-    mq_unlink ( " / message - queue " );
+    mq_close(queue);
+    mq_unlink("/message-queue");
     return 0;
 }
