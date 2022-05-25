@@ -26,22 +26,29 @@ struct product {
 
 int total_volume;               /* the total volume available in the stock */
 
-int[5] prod_space = {10, 10, 10, 10, 10};              /* space allowed for a specific product.
-                                                          if prod_space[3] == 4, it means that there can ba
-                                                          at most 4 product of type 4 in stock
-                                                       */
-int[5] prod_volume;             /* volume taken by a prod.
+int prod_space = {10, 10, 10, 10, 10};              /* space allowed for a specific product.
+                                                       if prod_space[3] == 4, it means that there can ba
+                                                       at most 4 product of type 4 in stock
+                                                    */
+int prod_volume[5];             /* volume taken by a prod.
                                  if prod_volume[1] == 2, it means that product of type 1
                                  has a volume of 2
                                 */
 
+
+/* product stock */
+struct product[prod_space[0]] prod1;
+struct product[prod_space[1]] prod2;
+struct product[prod_space[2]] prod3;
+struct product[prod_space[3]] prod4;
+struct product[prod_space[4]] prod5;
 
 struct product* warehouse_memory;
 
 void handle_ready(int signum, siginfo_t* info, void* context) {
     /* id of manufacturer */
     int man_id = info->si_value.sival_int;
-    
+        
     /* retrieve the product */
     key_t ipc_key = ftok("./manufacturer1", 42); /* TODO: format this string */
     if (ipc_key == -1){
@@ -63,9 +70,32 @@ void handle_prod_collection(int signum, siginfo_t* info, void* context) {
     /* we receive a ready */
     int man_id = info->si_value.sival_int;
     /* check if we have the place to stock it */
-    /* accesss the warehouse */
+    if (prod_space[man_id] > 0) {
+        /* there is space for it */
+        /* accesss the warehouse */
+        key_t ipc_key = ftok("./manufacturer1", 42); /* TODO: format this string */
+        if (ipc_key == -1){
+            perror("ftok");
+            return EXIT_SUCCESS;
+        }
+    
+        int shmid = shmget(ipc_key, sizeof(struct product), IPC_CREAT | 0666);
+        if (shmid == -1){
+            perror("shmget");
+            return EXIT_FAILURE;
+        }
+        /* attach the memory */
+        warehouse_memory = shmat(shmid, NULL, 0);
+        if (warehouse_memory == (void*) - 1) {
+            perror("shmat");
+            return EXIT_FAILURE;
+        }
+        /* read the product and add it to our stock */
+        prod
+    }
+    /* no space, we leave */
 
-    /* add the product  */
+    
 }
 
 int main()
@@ -79,13 +109,6 @@ int main()
     /* handle ready signal (when a manufacturer has built something) */
 
     /* creates a message queue to handle commands */
-
-    /* product stock */
-    struct product[prod_space[0]] prod1;
-    struct product[prod_space[1]] prod2;
-    struct product[prod_space[2]] prod3;
-    struct product[prod_space[3]] prod4;
-    struct product[prod_space[4]] prod5;
     
     return 0;
 }
