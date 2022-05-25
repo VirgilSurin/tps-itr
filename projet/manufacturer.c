@@ -77,7 +77,7 @@ void handle_ok(int signum, siginfo_t* info, void* context) {
     produce(prod_type, descr, volume, prod_speed); /* TODO : how to get the params ? */
     warehouse = FULL;
     while( warehouse == FULL) {
-        sleep(1)
+        sleep(1);
         union sigval envelope;
         envelope.sival_int = id;
         sigqueue(info->si_pid, SIGRT_READY, envelope);
@@ -145,7 +145,6 @@ int main() {
     id = 1;
     srand(time(0));
     prod_speed = rand()%5+1;     /* between [1, 5] */
-    warehouse_memory; /* where we place our product */
     
     /* states */
     warehouse = EMPTY;

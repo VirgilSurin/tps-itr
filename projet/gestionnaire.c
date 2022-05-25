@@ -26,36 +26,37 @@ struct product {
 
 int total_volume;               /* the total volume available in the stock */
 
-int prod_space = {10, 10, 10, 10, 10};              /* space allowed for a specific product.
+int prod_space[5] = {10, 10, 10, 10, 10};              /* space allowed for a specific product.
                                                        if prod_space[3] == 4, it means that there can ba
                                                        at most 4 product of type 4 in stock
                                                     */
-int prod_volume[5];             /* volume taken by a prod.
-                                 if prod_volume[1] == 2, it means that product of type 1
-                                 has a volume of 2
-                                */
+int prod_volume[5] = {2, 3, 1, 5, 4};             /* volume taken by a prod.
+                                                     if prod_volume[1] == 2, it means that product of type 1
+                                                     has a volume of 2
+                                                  */
 
 
 /* product stock */
-struct product[prod_space[0]] prod1;
-struct product[prod_space[1]] prod2;
-struct product[prod_space[2]] prod3;
-struct product[prod_space[3]] prod4;
-struct product[prod_space[4]] prod5;
+struct product prod1[10];
+struct product prod2[10];
+struct product prod3[10];
+struct product prod4[10];
+struct product prod5[10];
 
 struct product* warehouse_memory;
+int* pid_memory;
 
 void handle_ready(int signum, siginfo_t* info, void* context) {
     /* id of manufacturer */
     int man_id = info->si_value.sival_int;
         
     /* retrieve the product */
-    key_t ipc_key = ftok("./manufacturer1", 42); /* TODO: format this string */
+    key_t ipc_key = ftok(&"./manufacturer1" [man_id], 42);
     if (ipc_key == -1){
         perror("ftok");
     }
     
-    int shmid = shmget(ipc_key, sizeof(struct product), IPC_CREAT | 0666);
+    int shmid = shmget(ipc_key, sizeof(int)+sizeof(struct product), IPC_CREAT | 0666);
     if (shmid == -1){
         perror("shmget");
     }
@@ -73,41 +74,89 @@ void handle_prod_collection(int signum, siginfo_t* info, void* context) {
     if (prod_space[man_id] > 0) {
         /* there is space for it */
         /* accesss the warehouse */
-        key_t ipc_key = ftok("./manufacturer1", 42); /* TODO: format this string */
+        key_t ipc_key = ftok(&"./manufacturer1" [man_id], 42);
         if (ipc_key == -1){
             perror("ftok");
-            return EXIT_SUCCESS;
         }
     
         int shmid = shmget(ipc_key, sizeof(struct product), IPC_CREAT | 0666);
         if (shmid == -1){
             perror("shmget");
-            return EXIT_FAILURE;
         }
         /* attach the memory */
         warehouse_memory = shmat(shmid, NULL, 0);
         if (warehouse_memory == (void*) - 1) {
             perror("shmat");
-            return EXIT_FAILURE;
         }
-        /* read the product and add it to our stock */
-        prod
+        struct product prod = warehouse_memory[0];
+        switch (prod.prod_type) {
+        case 1: {
+            prod1[10-prod_space[prod.prod_type]--] = prod;
+            break;
+        }
+        case 2: {
+            prod2[10-prod_space[prod.prod_type]--] = prod;
+            break;
+        }
+        case 3: {
+            prod3[10-prod_space[prod.prod_type]--] = prod;
+            break;
+        }
+        case 4: {
+            prod4[10-prod_space[prod.prod_type]--] = prod;
+            break;
+        }
+        case 5: {
+            prod5[10-prod_space[prod.prod_type]--] = prod;
+            break;
+        }
+        default:
+            perror(&"INVALID PROD TYPE !" [prod.prod_type]);
+            break;
+        }
+        /* send OK to manufacturer */
+        union sigval envelope;
+        sigqueue(info->si_pid, SIGRT_OK, envelope);
+        printf("recieved : \n");
+        printf("type  : %d\ndescr  : %s\nvolume : %d\ns_n    : %d\n",
+               prod.prod_type, prod.descr, prod.volume, prod.serial_number);
+        shmdt(warehouse_memory);
     }
+    printf("Storage full !\n");
     /* no space, we leave */
-
     
 }
 
 int main()
 {
     /* encode products values */
-    prod_volume = {2, 3, 1, 5, 4};
-    prod_space = {10, 10, 10, 10, 10};
     total_volume = 2*10 + 3*10 + 1*10 + 5*10 + 4*10;
-    products = {0, 0, 0, 0, 0};
+    
+    /* creates a memory for our pid */
+    key_t ipc_key = ftok("./m_pid", 42);
+    if (ipc_key == -1){
+        perror("ftok");
+    }
+    
+    int shmid = shmget(ipc_key, sizeof(int), IPC_CREAT | 0666);
+    if (shmid == -1){
+        perror("shmget");
+    }
+    /* attach the memory */
+    pid_memory = shmat(shmid, NULL, 0);
+    if (pid_memory == (void*) - 1) {
+        perror("shmat");
+    }
+    pid_memory[0] = getpid();
+    shmdt(pid_memory);          /* detach memory */
     
     /* handle ready signal (when a manufacturer has built something) */
-
+    struct sigaction descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.sa_flags = SA_SIGINFO;
+    descriptor.sa_sigaction = handle_prod_collection;
+    sigaction(SIGRT_READY, &descriptor, NULL);
+    
     /* creates a message queue to handle commands */
     
     return 0;
