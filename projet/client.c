@@ -37,6 +37,7 @@ void handle_ready(int signum, siginfo_t* info, void* context){
     /* we randomly generate a table */
     // Use current time as seed for random generator
     srand(getpid());
+    sleep(rand()%(max_req_t+min_req_t) + min_req_t);
 
     int order[5];
 
@@ -81,7 +82,7 @@ int main() {
         /* return EXIT_SUCCESS; */
     }
     
-    int shmid = shmget(ipc_key, sizeof(struct product), IPC_CREAT | 0666);
+    int shmid = shmget(ipc_key, sizeof(struct product)*50, IPC_CREAT | 0666);
     if (shmid == -1){
         perror("shmget");
         /* return EXIT_FAILURE; */
@@ -93,8 +94,5 @@ int main() {
         /* return EXIT_FAILURE; */
     }
 
-    
-    union sigval envelope;
-    sigqueue(si_pid, SIGRT_READY, envelope); //TODO changer pour le pid du gestionnaire O3O
 
 }
