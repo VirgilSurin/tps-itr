@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <mqueue.h>
+
 #include <sys/ipc.h>
 #include <sys/stat.h>
 #include <sys/shm.h>
@@ -12,6 +14,7 @@
 /* Signals definitions */
 #define SIGRT_READY (SIGRTMIN+1) /* received from manufacturer */
 #define SIGRT_OK (SIGRTMIN+2)   /* to be sent to manufacturer */
+#define SIGRT_QUEUE (SIGRTMIN+3) /*something arrived in the message queue*/
 
 
 /* PRODUCT */
@@ -21,7 +24,7 @@ struct product {
     int volume;                 /* depends on prod_type */
     int serial_number;          /* randomly generated */
 };
-
+mqd_t queue;
 
 
 int total_volume;               /* the total volume available in the stock */
@@ -59,6 +62,10 @@ void handle_ready(int signum, siginfo_t* info, void* context) {
     }
 }
 
+void handle_queue(int signum, siginfo_t* info, void* context) {
+    
+}
+
 void handle_prod_collection(int signum, siginfo_t* info, void* context) {
     /* we receive a ready */
     int man_id = info->si_value.sival_int;
@@ -70,6 +77,10 @@ void handle_prod_collection(int signum, siginfo_t* info, void* context) {
 
 int main()
 {
+    queue = mq_open ( " / message - queue " , O_CREAT | O_RDONLY );
+    if ( queue == -1) { perror ( " mq_open " ); return EXIT_FAILURE ; }
+
+    mq_notify(queue, SIGRT_QUEUE)
     /* encode products values */
     prod_volume = {2, 3, 1, 5, 4};
     prod_space = {10, 10, 10, 10, 10};
@@ -86,6 +97,7 @@ int main()
     struct product[prod_space[2]] prod3;
     struct product[prod_space[3]] prod4;
     struct product[prod_space[4]] prod5;
-    
+    mq_close ( queue );
+    mq_unlink ( " / message - queue " );
     return 0;
 }
