@@ -72,28 +72,6 @@ struct product remove_last_prod(int prod_type) {
     return p;
 }
 
-
-void handle_ready(int signum, siginfo_t* info, void* context) {
-    /* id of manufacturer */
-    int man_id = info->si_value.sival_int;
-        
-    /* retrieve the product */
-    key_t ipc_key = ftok(&"./manufacturer1" [man_id], 42);
-    if (ipc_key == -1){
-        perror("ftok");
-    }
-    
-    int shmid = shmget(ipc_key, sizeof(int)+sizeof(struct product), IPC_CREAT | 0666);
-    if (shmid == -1){
-        perror("shmget");
-    }
-    /* attach the memory */
-    warehouse_memory = shmat(shmid, NULL, 0);
-    if (warehouse_memory == (void*) - 1) {
-        perror("shmat");
-    }
-}
-
 void handle_queue(int signum, siginfo_t* info, void* context) {
     /* there is an order in the mq */
     char* order = malloc(sizeof(char)*5);
@@ -143,7 +121,29 @@ void handle_queue(int signum, siginfo_t* info, void* context) {
                 prod_space[i]++;
             }
         }
-        /* TODO : place the prod in client's warehouse */
+        key_t ipc_key = ftok("./client", 42);
+        if (ipc_key == -1){
+            perror("ftok");
+            /* return EXIT_SUCCESS; */
+        }
+    
+        int shmid = shmget(ipc_key, sizeof(struct product)*50, IPC_CREAT | 0666);
+        if (shmid == -1){
+            perror("shmget");
+            /* return EXIT_FAILURE; */
+        }
+        /* attach the memory */
+        warehouse_memory = shmat(shmid, NULL, 0);
+        if (warehouse_memory == (void*) - 1) {
+            perror("shmat");
+            /* return EXIT_FAILURE; */
+        }
+        warehouse_memory = prod;
+
+        shmdt(warehouse_memory);
+
+        union sigval envelope;
+        sigqueue(info->si_pid, SIGRT_READY, envelope);
         
         mq_close(queue);
     
