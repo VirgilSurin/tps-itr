@@ -37,6 +37,8 @@ int prod_type;
 char* descr;
 int volume;
 
+int* manager_pid;
+
 /* PRODUCT */
 struct product {
     int prod_type;              /* between 0 to 5 */
@@ -53,6 +55,7 @@ volatile sig_atomic_t daytime = DAY;
 int counter = 0;
 
 struct product produce(int prod_type, char* descr, int volume, int prod_speed){
+    printf("producing\n");
     srand(time(0));             /* for serial number */
     sleep(prod_speed);          /* it takes time to produce something */
     struct product prod;
@@ -64,6 +67,7 @@ struct product produce(int prod_type, char* descr, int volume, int prod_speed){
 }
 
 void handle_ok(int signum, siginfo_t* info, void* context) {
+    printf("handle ok\n");
     /* stock_manager has picked up the product */
     warehouse = EMPTY;
     while (daytime == NIGHT) {
@@ -79,13 +83,34 @@ void handle_ok(int signum, siginfo_t* info, void* context) {
 
 
 void* time_management(void* args) {
+    printf("entered time management\n");
     while(1) {
         sleep(12);
         daytime = daytime==NIGHT ? DAY : NIGHT; /* switch to night or day */
+        printf("day/night cycle\n");
     }
 }
 
 int main() {
+
+    key_t ipc_key = ftok("./m_pid", 42); /* TODO: format this string */
+    if (ipc_key == -1){
+        perror("ftok");
+        return EXIT_SUCCESS;
+    }
+    printf("ftok\n");
+    int shmid = shmget(ipc_key, sizeof(int), IPC_CREAT | 0666);
+    if (shmid == -1){
+        perror("shmget");
+        return EXIT_FAILURE;
+    }
+    printf("shmget\n");
+    /* attach the memory */
+    manager_pid = shmat(shmid, NULL, 0);
+    if (warehouse_memory == (void*) - 1) {
+        perror("shmat");
+        return EXIT_FAILURE;
+    }
 
     //Should not ever receive messages before memory is created anyway.
     struct sigaction descriptor;
@@ -93,6 +118,7 @@ int main() {
     descriptor.sa_flags = SA_SIGINFO;
     descriptor.sa_sigaction = handle_ok;
     sigaction(SIGRT_OK, &descriptor, NULL);
+    printf("inited sigaction\n");
 
     /* TODO:
        first we create 5 thread (one for each product),
@@ -105,6 +131,7 @@ int main() {
     pthread_t primary = pthread_self();
     pthread_t time_thread;      /* this tread will handle the day/night cycle */
     pthread_create(&time_thread, NULL, time_management, NULL);
+    printf("created primary thread\n");
     /* pthread_t secondary; */
     /* pthread_t third; */
     /* pthread_t fourth; */
@@ -125,6 +152,7 @@ int main() {
     prod_type = 1;
     descr = "very cool product number 1 !";
     volume = 3;
+    printf("created very cool product number 1!\n");
 
     /* ---------------ROUTINE--------------- */
     /*
@@ -135,19 +163,20 @@ int main() {
         perror("ftok");
         return EXIT_SUCCESS;
     }
-    
+    printf("ftok\n");
     int shmid = shmget(ipc_key, sizeof(struct product), IPC_CREAT | 0666);
     if (shmid == -1){
         perror("shmget");
         return EXIT_FAILURE;
     }
+    printf("shmget\n");
     /* attach the memory */
     warehouse_memory = shmat(shmid, NULL, 0);
     if (warehouse_memory == (void*) - 1) {
         perror("shmat");
         return EXIT_FAILURE;
     }
-    
+    printf("shmat\n");
     while (daytime == NIGHT) {
         printf("Manufacturer %d is spleeping...\n", id);
         pause();
@@ -156,9 +185,17 @@ int main() {
     produce(prod_type, descr, volume, prod_speed);
     // Warehouse is now full because something has been created.
     warehouse = FULL;
-    union sigval envelope;
-    pid_t pid = 4;
-    sigqueue(pid, SIGRT_READY, envelope); //TODO changer pour le pid du gestionnaire O3O
+    printf("warehouse FULL\n");
+    while (warehouse == FULL)
+    {
+        sleep(1);
+        printf("warehouse still full\n");
+        union sigval envelope;
+        pid_t pid = 4;
+        sigqueue(pid, SIGRT_READY, envelope); //TODO changer pour le pid du gestionnaire O3O
+    }
+    printf("end of main\n");
+    
 }
 
 
