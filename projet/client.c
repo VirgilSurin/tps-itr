@@ -17,6 +17,8 @@
 
 struct product* warehouse_memory;
 
+mqd_t queue;
+
 int c_id;
 int min_req_t;
 int max_req_t;
@@ -31,8 +33,7 @@ struct product {
 
 void handle_ready(int signum, siginfo_t* info, void* context){
 
-    mqd_t queue = mq_open ( " / message - queue " , O_WRONLY );
-    if ( queue == -1) { perror ( " mq_open " ); return EXIT_FAILURE ; }
+    
 
     /* we randomly generate a table */
     // Use current time as seed for random generator
@@ -49,8 +50,7 @@ void handle_ready(int signum, siginfo_t* info, void* context){
     int status = mq_send ( queue , order , sizeOf(order) , 0);
     if ( status == -1) perror ( " mq_send " );
 
-    mq_close ( queue );
-
+    
     return EXIT_SUCCESS ;
 
     union sigval envelope;
@@ -60,12 +60,17 @@ void handle_ready(int signum, siginfo_t* info, void* context){
 
 int main() {
 
+    queue = mq_open ( " / message - queue " , O_WRONLY );
+    if ( queue == -1) { perror ( " mq_open " ); return EXIT_FAILURE ; }
+
     //Should not ever receive messages before memory is created anyway.
     struct sigaction descriptor;
     memset(&descriptor, 0, sizeof(descriptor));
     descriptor.sa_flags = SA_SIGINFO;
     descriptor.sa_sigaction = handle_ready;
     sigaction(SIGRT_READY, &descriptor, NULL);
+
+    
 
     /* TODO:
        first we create 5 thread (one for each product),
@@ -94,5 +99,6 @@ int main() {
         /* return EXIT_FAILURE; */
     }
 
+    mq_close ( queue );
 
 }

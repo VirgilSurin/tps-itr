@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <mqueue.h>
+
 #include <sys/ipc.h>
 #include <sys/stat.h>
 #include <sys/shm.h>
@@ -12,6 +14,7 @@
 /* Signals definitions */
 #define SIGRT_READY (SIGRTMIN+1) /* received from manufacturer */
 #define SIGRT_OK (SIGRTMIN+2)   /* to be sent to manufacturer */
+#define SIGRT_QUEUE (SIGRTMIN+3) /*something arrived in the message queue*/
 
 
 /* PRODUCT */
@@ -22,7 +25,7 @@ struct product {
     int serial_number;          /* randomly generated */
 };
 
-
+mqd_t queue;
 
 int total_volume;               /* the total volume available in the stock */
 
@@ -65,6 +68,10 @@ void handle_ready(int signum, siginfo_t* info, void* context) {
     if (warehouse_memory == (void*) - 1) {
         perror("shmat");
     }
+}
+
+void handle_queue(int signum, siginfo_t* info, void* context) {
+    
 }
 
 void handle_prod_collection(int signum, siginfo_t* info, void* context) {
@@ -129,6 +136,10 @@ void handle_prod_collection(int signum, siginfo_t* info, void* context) {
 
 int main()
 {
+    queue = mq_open ( " / message - queue " , O_CREAT | O_RDONLY );
+    if ( queue == -1) { perror ( " mq_open " ); return EXIT_FAILURE ; }
+
+    mq_notify(queue, SIGRT_QUEUE);
     /* encode products values */
     total_volume = 2*10 + 3*10 + 1*10 + 5*10 + 4*10;
     
@@ -158,6 +169,7 @@ int main()
     sigaction(SIGRT_READY, &descriptor, NULL);
     
     /* creates a message queue to handle commands */
-    
+    mq_close ( queue );
+    mq_unlink ( " / message - queue " );
     return 0;
 }
