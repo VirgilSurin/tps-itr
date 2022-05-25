@@ -5,12 +5,15 @@
 #include <semaphore.h>
 #include <signal.h>
 
+#include <mqueue.h>
+
 #include <sys/ipc.h>
 #include <sys/stat.h>
 #include <sys/shm.h>
 
 #define SIGRT_READY (SIGRTMIN+1)
 #define SIGRT_ORDER (SIGRTMIN+2)
+
 
 struct product* warehouse_memory;
 
@@ -26,6 +29,32 @@ struct product {
     int serial_number;          /* randomly generated */
 };
 
+void handle_ready(int signum, siginfo_t* info, void* context){
+
+    mqd_t queue = mq_open ( " / message - queue " , O_WRONLY );
+    if ( queue == -1) { perror ( " mq_open " ); return EXIT_FAILURE ; }
+
+    /* we randomly generate a table */
+    // Use current time as seed for random generator
+    srand(getpid());
+
+    int order[5];
+
+    for (int i = 0; i < sizeOf(order); i++)
+    {
+        order[i] = rand() % 10;
+    }
+    
+    int status = mq_send ( queue , order , sizeOf(order) , 0);
+    if ( status == -1) perror ( " mq_send " );
+
+    mq_close ( queue );
+
+    return EXIT_SUCCESS ;
+
+    union sigval envelope;
+    sigqueue(info->si_pid, SIGRT_READY, envelope);
+}
 
 
 int main() {
@@ -63,16 +92,9 @@ int main() {
         perror("shmat");
         /* return EXIT_FAILURE; */
     }
-    warehouse = EMPTY;
-    while (time == NIGHT) {
-          printf("I'm sleeping...\n");
-          pause();
-    }// Warehouse is empty when nothing has been produced yet.
-    produce();
-    //Warehouse is now full because something has been created.
-    warehouse = FULL;
+
+    
     union sigval envelope;
     sigqueue(si_pid, SIGRT_READY, envelope); //TODO changer pour le pid du gestionnaire O3O
-    warehouse = FULL;
 
 }

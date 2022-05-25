@@ -61,7 +61,7 @@ void handle_ready(int signum, siginfo_t* info, void* context) {
 
 void handle_prod_collection(int signum, siginfo_t* info, void* context) {
     /* we receive a ready */
-    int man_id = info->si_value;
+    int man_id = info->si_value.sival_int;
     /* check if we have the place to stock it */
     /* accesss the warehouse */
 
